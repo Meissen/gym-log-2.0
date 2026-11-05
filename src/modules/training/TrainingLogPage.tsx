@@ -8,7 +8,7 @@ import {
   ChevronDown, 
   Settings2, 
   History,
-  CloudUpload
+  Cloud
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTrainingLog } from './hooks/useTrainingLog';
@@ -322,7 +322,7 @@ export const TrainingLogPage: React.FC = () => {
             }
             className="py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold rounded-xl text-sm border border-indigo-500/50 active:scale-[0.98] transition-transform flex items-center justify-center gap-1 shadow-md shadow-indigo-950/40"
           >
-            <CloudUpload className="w-4 h-4" /> 完成這個動作
+            <Cloud className="w-4 h-4" /> 完成這個動作
           </button>
         </div>
 
