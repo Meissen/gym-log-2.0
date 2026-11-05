@@ -9,11 +9,12 @@ export class GoogleSheetsService {
     localStorage.setItem('gas_webapp_url', url.trim());
   }
 
-  // 1. GET: 同步全站資料
+  // 1. GET: 同步全站資料 (包含健康、動作、設定、歷史訓練數據)
   public static async fetchAllData(): Promise<{
     health: HealthRecord[];
     movements: { movements: Movement[]; methods: string[] };
     settings: { system: Partial<SystemSettings>; movementSettings: MovementSetting[] };
+    training?: TrainingFlatRow[];
   }> {
     const url = this.getUrl();
     if (!url) throw new Error('尚未設定 Google Apps Script Web App URL，請先前往「設定」輸入。');

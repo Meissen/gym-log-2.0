@@ -37,7 +37,7 @@ export const MovementManageModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
         {/* 新增動作表單 */}
         <form onSubmit={handleAdd} className="p-4 border-b border-slate-800 space-y-3">
-          <div className="text-xs font-semibold text-slate-400">新增動作</div>
+          <div className="text-xs font-semibold text-slate-400">新增動作 (自動排列於該部位最後)</div>
           <div className="flex gap-2">
             <input
               type="text"

@@ -6,7 +6,7 @@ import { useAppStore } from '../store/useAppStore';
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const { setAllRemoteData, systemSettings } = useAppStore();
+  const { setAllRemoteData, systemSettings, activeDraft } = useAppStore();
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
 
@@ -16,7 +16,7 @@ export const HomePage: React.FC = () => {
       setSyncStatus('');
       const data = await GoogleSheetsService.fetchAllData();
       setAllRemoteData(data);
-      setSyncStatus('✅ 雙向同步成功！本地資料已更新至最新。');
+      setSyncStatus('✅ 雙向同步成功！所有動作與歷史資料已更新至最新。');
       setTimeout(() => setSyncStatus(''), 3000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -25,6 +25,10 @@ export const HomePage: React.FC = () => {
       setIsSyncing(false);
     }
   };
+
+  const hasOngoingTraining = 
+    Boolean(activeDraft.selectedMovementId) || 
+    activeDraft.currentMovementSets.length > 0;
 
   return (
     <div className="flex flex-col min-h-screen safe-top safe-bottom p-5 bg-slate-950 justify-between select-none">
@@ -41,7 +45,7 @@ export const HomePage: React.FC = () => {
       {/* 四個主要功能大按鈕 */}
       <main className="grid grid-cols-1 gap-4 my-auto max-w-sm mx-auto w-full">
         {syncStatus && (
-          <div className="p-3 bg-emerald-950/80 border border-emerald-800 rounded-xl text-center text-xs font-semibold text-emerald-300 flex items-center justify-center gap-1.5">
+          <div className="p-3 bg-emerald-950/80 border border-emerald-800 rounded-xl text-center text-xs font-semibold text-emerald-300 flex items-center justify-center gap-1.5 shadow-md">
             <CheckCircle2 className="w-4 h-4" />
             {syncStatus}
           </div>
@@ -62,14 +66,25 @@ export const HomePage: React.FC = () => {
 
         <button
           onClick={() => navigate('/training')}
-          className="flex items-center gap-4 p-5 bg-gradient-to-r from-blue-950/70 to-blue-800/70 border border-blue-500/30 rounded-2xl text-white font-bold text-lg active:scale-95 transition-transform shadow-lg shadow-blue-950/30"
+          className="flex items-center gap-4 p-5 bg-gradient-to-r from-blue-950/70 to-blue-800/70 border border-blue-500/30 rounded-2xl text-white font-bold text-lg active:scale-95 transition-transform shadow-lg shadow-blue-950/30 relative overflow-hidden"
         >
           <div className="p-3 bg-blue-500/20 rounded-xl">
             <Dumbbell className="w-8 h-8 text-blue-400" />
           </div>
           <div className="text-left">
-            <div>訓練紀錄</div>
-            <div className="text-[11px] text-blue-300/70 font-normal">動作組數、A/B檔位微調</div>
+            <div className="flex items-center gap-2">
+              <span>訓練紀錄</span>
+              {hasOngoingTraining && (
+                <span className="text-[10px] bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded font-black uppercase">
+                  進行中
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-blue-300/70 font-normal">
+              {hasOngoingTraining 
+                ? `正記錄: ${activeDraft.selectedMovementId || '已保留草稿'}` 
+                : '組數微調、即時上傳、調閱歷史'}
+            </div>
           </div>
         </button>
 

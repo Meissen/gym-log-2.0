@@ -37,7 +37,7 @@ export interface SystemSettings {
   gasWebAppUrl: string;
 }
 
-// 5. 訓練動態組 (Block)
+// 5. 訓練動態組 (Block) - 支援重量 0 與次數小數點
 export interface TrainingBlock {
   id: string;
   weight: number;
@@ -45,11 +45,12 @@ export interface TrainingBlock {
   reps: number;
 }
 
-// 6. 訓練單組紀錄
+// 6. 訓練單組紀錄 (含精準當下完成時間戳)
 export interface TrainingSetRecord {
   setIndex: number;
   movementName: string;
   trainingMethod: string;
+  completedAt: string; // 本地真實完成時間 (YYYY-MM-DD HH:mm:ss)
   blocks: {
     blockIndex: number;
     weight: number;
@@ -58,9 +59,9 @@ export interface TrainingSetRecord {
   }[];
 }
 
-// 7. 扁平化上傳資料行
+// 7. 扁平化上傳資料行 (與 Google Sheet「訓練數據」對齊)
 export interface TrainingFlatRow {
-  sessionDate: string;
+  sessionDate: string; // 該組實際完成時間
   movementName: string;
   trainingMethod: string;
   setIndex: number;
@@ -70,4 +71,13 @@ export interface TrainingFlatRow {
   reps: number;
   isTest: boolean;
   createdAt: string;
+}
+
+// 8. 訓練中的即時草稿 (確保跳至主頁再返回不遺失狀態)
+export interface ActiveTrainingDraft {
+  selectedMethod: string;
+  selectedMovementId: string;
+  currentSetIndex: number;
+  blocks: TrainingBlock[];
+  currentMovementSets: TrainingSetRecord[];
 }

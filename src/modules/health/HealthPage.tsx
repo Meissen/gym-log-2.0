@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, HeartPulse } from 'lucide-react';
 import { GoogleSheetsService } from '../../services/googleSheetsService';
 import { useAppStore } from '../../store/useAppStore';
+import { formatLocalDateTime } from '../../utils/dateHelper';
 
 export const HealthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -28,7 +29,7 @@ export const HealthPage: React.FC = () => {
     try {
       await GoogleSheetsService.uploadHealth({
         id: `h_${Date.now()}`,
-        timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        timestamp: formatLocalDateTime(new Date()), // 使用手機真實本地時間
         height: parseFloat(height),
         weight: parseFloat(weight),
         bodyFat: bodyFat ? parseFloat(bodyFat) : null,
@@ -49,7 +50,7 @@ export const HealthPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen safe-top safe-bottom bg-slate-950 text-slate-100">
+    <div className="flex flex-col min-h-screen safe-top safe-bottom bg-slate-950 text-slate-100 select-none">
       {/* 頂部導航 */}
       <header className="px-4 py-3 flex items-center justify-between border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-10">
         <button
@@ -63,15 +64,15 @@ export const HealthPage: React.FC = () => {
       </header>
 
       <main className="flex-1 p-5 max-w-md mx-auto w-full space-y-6">
-        <div className="flex items-center gap-3 bg-rose-950/40 border border-rose-900/50 p-4 rounded-2xl">
+        <div className="flex items-center gap-3 bg-rose-950/40 border border-rose-900/50 p-4 rounded-2xl shadow-sm">
           <HeartPulse className="w-8 h-8 text-rose-400 shrink-0" />
-          <div className="text-xs text-rose-200">
+          <div className="text-xs text-rose-200 leading-relaxed">
             定期記錄體重與體組成數據，將自動追加同步至雲端「健康數據」試算表中。
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4 shadow-sm">
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1.5">身高 (cm) *</label>
               <input
@@ -81,7 +82,7 @@ export const HealthPage: React.FC = () => {
                 value={height}
                 onChange={(e) => setHeight(e.target.value)}
                 placeholder="例如 175"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-base font-semibold text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-base font-semibold text-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-mono"
               />
             </div>
 
@@ -94,7 +95,7 @@ export const HealthPage: React.FC = () => {
                 value={weight}
                 onChange={(e) => setWeight(e.target.value)}
                 placeholder="例如 70.5"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-base font-semibold text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-base font-semibold text-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-mono"
               />
             </div>
 
@@ -106,7 +107,7 @@ export const HealthPage: React.FC = () => {
                 value={bodyFat}
                 onChange={(e) => setBodyFat(e.target.value)}
                 placeholder="選填，例如 15.2"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-base font-semibold text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-base font-semibold text-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-mono"
               />
             </div>
 
@@ -118,7 +119,7 @@ export const HealthPage: React.FC = () => {
                 value={skeletalMuscle}
                 onChange={(e) => setSkeletalMuscle(e.target.value)}
                 placeholder="選填，例如 32.8"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-base font-semibold text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-base font-semibold text-white focus:outline-none focus:ring-2 focus:ring-rose-500 font-mono"
               />
             </div>
           </div>

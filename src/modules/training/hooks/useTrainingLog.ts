@@ -1,20 +1,12 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { 
   TrainingBlock, 
   TrainingSetRecord, 
-  MovementSetting, 
   WeightUnit, 
   TrainingFlatRow 
 } from '../../../types/models';
-
-interface UseTrainingLogProps {
-  movementSettings: MovementSetting[];
-  defaultDisplayUnit: WeightUnit;
-  storageUnit: WeightUnit;
-  isTestMode: boolean;
-  onSaveToLocalCache: (records: TrainingFlatRow[]) => void;
-  onUploadSession: (records: TrainingFlatRow[]) => Promise<boolean>;
-}
+import { useAppStore } from '../../../store/useAppStore';
+import { formatLocalDateTime } from '../../../utils/dateHelper';
 
 const KG_TO_LB = 2.20462;
 export const convertWeight = (val: number, from: WeightUnit, to: WeightUnit): number => {
@@ -23,52 +15,66 @@ export const convertWeight = (val: number, from: WeightUnit, to: WeightUnit): nu
   return Math.round((val / KG_TO_LB) * 10) / 10;
 };
 
-export const useTrainingLog = ({
-  movementSettings,
-  defaultDisplayUnit,
-  storageUnit,
-  isTestMode,
-  onSaveToLocalCache,
-  onUploadSession,
-}: UseTrainingLogProps) => {
-  const [selectedMethod, setSelectedMethod] = useState<string>('訓練組');
-  const [selectedMovementId, setSelectedMovementId] = useState<string>('');
-  const [currentSetIndex, setCurrentSetIndex] = useState<number>(1);
-  const [sessionCompletedSets, setSessionCompletedSets] = useState<TrainingSetRecord[]>([]);
+export const useTrainingLog = () => {
+  const {
+    movementSettings,
+    systemSettings,
+    activeDraft,
+    updateActiveDraft,
+    resetActiveDraft,
+    saveToOfflineCache,
+    uploadTrainingBatch,
+  } = useAppStore();
+
+  const {
+    selectedMethod,
+    selectedMovementId,
+    currentSetIndex,
+    blocks,
+    currentMovementSets,
+  } = activeDraft;
+
+  const storageUnit = systemSettings.storageUnit;
+  const defaultDisplayUnit = systemSettings.defaultDisplayUnit;
+  const isTestMode = systemSettings.isTestMode;
 
   // 當前動作的設定檔 (包含 A/B 模式與預設次數)
   const activeSetting = useMemo(() => {
     return movementSettings.find((s) => s.movementName === selectedMovementId);
   }, [movementSettings, selectedMovementId]);
 
-  // 動態 Blocks 陣列 (至少包含 1 個 Block)
-  const [blocks, setBlocks] = useState<TrainingBlock[]>([
-    { id: 'b_1', weight: 0, reps: 0, unit: defaultDisplayUnit }
-  ]);
+  // 切換訓練方法
+  const setSelectedMethod = useCallback((method: string) => {
+    updateActiveDraft({ selectedMethod: method });
+  }, [updateActiveDraft]);
 
   // 切換動作時：自動套用預設重量與次數
   const handleSelectMovement = useCallback((movementName: string) => {
-    setSelectedMovementId(movementName);
     const setting = movementSettings.find((s) => s.movementName === movementName);
     const initWeight = setting ? setting.defaultWeight : 20;
     const initReps = setting ? setting.defaultReps : 10;
 
-    setBlocks([
-      {
-        id: `b_${Date.now()}_1`,
-        weight: initWeight,
-        reps: initReps,
-        unit: defaultDisplayUnit,
-      }
-    ]);
-  }, [movementSettings, defaultDisplayUnit]);
+    updateActiveDraft({
+      selectedMovementId: movementName,
+      currentSetIndex: 1,
+      currentMovementSets: [],
+      blocks: [
+        {
+          id: `b_${Date.now()}_1`,
+          weight: initWeight,
+          reps: initReps,
+          unit: defaultDisplayUnit,
+        },
+      ],
+    });
+  }, [movementSettings, defaultDisplayUnit, updateActiveDraft]);
 
-  // 重量微調 (A 模式固定加減 / B 模式動態檔位搜尋)
+  // 重量微調 (支援重量 0、A 模式固定加減 / B 模式動態檔位搜尋)
   const tuneWeight = useCallback((blockId: string, direction: 'UP' | 'DOWN') => {
-    setBlocks((prev) => prev.map((block) => {
+    const nextBlocks = blocks.map((block) => {
       if (block.id !== blockId) return block;
 
-      const currentWeight = block.weight;
+      const currentWeight = Number(block.weight) || 0;
       let newWeight = currentWeight;
 
       if (!activeSetting || activeSetting.mode === 'A') {
@@ -76,58 +82,59 @@ export const useTrainingLog = ({
         newWeight = direction === 'UP' ? currentWeight + step : Math.max(0, currentWeight - step);
       } else {
         const gears = activeSetting.gearLevels || [];
-        if (gears.length === 0) return block;
-
-        if (direction === 'UP') {
+        if (gears.length === 0) {
+          newWeight = direction === 'UP' ? currentWeight + 2.5 : Math.max(0, currentWeight - 2.5);
+        } else if (direction === 'UP') {
           const nextGear = gears.find((g) => g > currentWeight);
-          newWeight = nextGear !== undefined ? nextGear : gears[gears.length - 1];
+          newWeight = nextGear !== undefined ? nextGear : (gears[gears.length - 1] || currentWeight + 2.5);
         } else {
           const prevGears = gears.filter((g) => g < currentWeight);
-          newWeight = prevGears.length > 0 ? prevGears[prevGears.length - 1] : gears[0];
+          newWeight = prevGears.length > 0 ? prevGears[prevGears.length - 1] : 0;
         }
       }
 
       return { ...block, weight: Math.round(newWeight * 10) / 10 };
-    }));
-  }, [activeSetting]);
+    });
+
+    updateActiveDraft({ blocks: nextBlocks });
+  }, [blocks, activeSetting, updateActiveDraft]);
+
+  // 次數微調 (+1 或 -1，支援小數點並防止小於 0)
+  const tuneReps = useCallback((blockId: string, direction: 'UP' | 'DOWN') => {
+    const nextBlocks = blocks.map((block) => {
+      if (block.id !== blockId) return block;
+      const currentReps = Number(block.reps) || 0;
+      const newReps = direction === 'UP' ? currentReps + 1 : Math.max(0, currentReps - 1);
+      return { ...block, reps: Math.round(newReps * 10) / 10 };
+    });
+
+    updateActiveDraft({ blocks: nextBlocks });
+  }, [blocks, updateActiveDraft]);
 
   // 動態 Block 操作
   const addBlock = useCallback(() => {
-    setBlocks((prev) => {
-      const lastBlock = prev[prev.length - 1];
-      const newBlock: TrainingBlock = {
-        id: `b_${Date.now()}_${prev.length + 1}`,
-        weight: lastBlock ? lastBlock.weight : 0,
-        reps: lastBlock ? lastBlock.reps : 0,
-        unit: lastBlock ? lastBlock.unit : defaultDisplayUnit,
-      };
-      return [...prev, newBlock];
-    });
-  }, [defaultDisplayUnit]);
+    const lastBlock = blocks[blocks.length - 1];
+    const newBlock: TrainingBlock = {
+      id: `b_${Date.now()}_${blocks.length + 1}`,
+      weight: lastBlock ? lastBlock.weight : 0,
+      reps: lastBlock ? lastBlock.reps : 0,
+      unit: lastBlock ? lastBlock.unit : defaultDisplayUnit,
+    };
+    updateActiveDraft({ blocks: [...blocks, newBlock] });
+  }, [blocks, defaultDisplayUnit, updateActiveDraft]);
 
   const removeBlock = useCallback((blockId: string) => {
-    setBlocks((prev) => {
-      if (prev.length <= 1) return prev;
-      return prev.filter((b) => b.id !== blockId);
-    });
-  }, []);
+    if (blocks.length <= 1) return;
+    updateActiveDraft({ blocks: blocks.filter((b) => b.id !== blockId) });
+  }, [blocks, updateActiveDraft]);
 
   const updateBlock = useCallback((blockId: string, field: 'weight' | 'reps', value: number) => {
-    setBlocks((prev) => prev.map((b) => (b.id === blockId ? { ...b, [field]: value } : b)));
-  }, []);
-
-  // 次數微調 (+1 或 -1，支援小數點並防止小於0)
-  const tuneReps = useCallback((blockId: string, direction: 'UP' | 'DOWN') => {
-    setBlocks((prev) => prev.map((block) => {
-      if (block.id !== blockId) return block;
-      const currentReps = block.reps;
-      const newReps = direction === 'UP' ? currentReps + 1 : Math.max(0, currentReps - 1);
-      return { ...block, reps: Math.round(newReps * 10) / 10 };
-    }));
-  }, []);
+    const nextBlocks = blocks.map((b) => (b.id === blockId ? { ...b, [field]: value } : b));
+    updateActiveDraft({ blocks: nextBlocks });
+  }, [blocks, updateActiveDraft]);
 
   const toggleBlockUnit = useCallback((blockId: string) => {
-    setBlocks((prev) => prev.map((b) => {
+    const nextBlocks = blocks.map((b) => {
       if (b.id !== blockId) return b;
       const nextUnit: WeightUnit = b.unit === 'kg' ? 'lb' : 'kg';
       return {
@@ -135,75 +142,102 @@ export const useTrainingLog = ({
         unit: nextUnit,
         weight: convertWeight(b.weight, b.unit, nextUnit),
       };
-    }));
-  }, []);
+    });
+    updateActiveDraft({ blocks: nextBlocks });
+  }, [blocks, updateActiveDraft]);
 
-  // [完成這組]
+  // [完成這組] - 立即記錄手機當下系統精確時間 (YYYY-MM-DD HH:mm:ss)
   const finishSet = useCallback(() => {
     if (!selectedMovementId) return;
+
+    const setTimestamp = formatLocalDateTime(new Date());
 
     const setRecord: TrainingSetRecord = {
       setIndex: currentSetIndex,
       movementName: selectedMovementId,
       trainingMethod: selectedMethod,
+      completedAt: setTimestamp,
       blocks: blocks.map((b, idx) => ({
         blockIndex: idx + 1,
-        weight: convertWeight(b.weight, b.unit, storageUnit),
+        weight: convertWeight(Number(b.weight) || 0, b.unit, storageUnit),
         storedUnit: storageUnit,
-        reps: b.reps,
+        reps: Number(b.reps) || 0,
       })),
     };
 
-    setSessionCompletedSets((prev) => [...prev, setRecord]);
-    setCurrentSetIndex((prev) => prev + 1);
-  }, [currentSetIndex, selectedMovementId, selectedMethod, blocks, storageUnit]);
+    updateActiveDraft({
+      currentMovementSets: [...currentMovementSets, setRecord],
+      currentSetIndex: currentSetIndex + 1,
+    });
+  }, [currentSetIndex, selectedMovementId, selectedMethod, blocks, storageUnit, currentMovementSets, updateActiveDraft]);
 
-  // [完成這個動作]
-  const finishMovement = useCallback(() => {
-    setCurrentSetIndex(1);
-    setSelectedMovementId('');
-    setBlocks([{ id: `b_${Date.now()}`, weight: 0, reps: 0, unit: defaultDisplayUnit }]);
-  }, [defaultDisplayUnit]);
+  // [完成這個動作] - 重構為：直接將該動作的所有組數同步上傳至 Google Sheet
+  const finishMovement = useCallback(async () => {
+    if (!selectedMovementId) return false;
 
-  // [完成今天訓練]
-  const finishWorkout = useCallback(async () => {
-    if (sessionCompletedSets.length === 0) {
-      alert('目前尚未記錄任何完成的組數！');
-      return false;
-    }
-
-    const sessionDateTime = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    const createdAt = new Date().toISOString();
-
-    const flatRows: TrainingFlatRow[] = [];
-    sessionCompletedSets.forEach((set) => {
-      set.blocks.forEach((b) => {
-        flatRows.push({
-          sessionDate: sessionDateTime,
-          movementName: set.movementName,
-          trainingMethod: set.trainingMethod,
-          setIndex: set.setIndex,
-          blockIndex: b.blockIndex,
-          weight: b.weight,
-          weightUnit: b.storedUnit,
-          reps: b.reps,
-          isTest: isTestMode,
-          createdAt,
+    // 若有已完成的組數，立即批次上傳
+    if (currentMovementSets.length > 0) {
+      const flatRows: TrainingFlatRow[] = [];
+      currentMovementSets.forEach((set) => {
+        set.blocks.forEach((b) => {
+          flatRows.push({
+            sessionDate: set.completedAt, // 每組真實手機完成時間！
+            movementName: set.movementName,
+            trainingMethod: set.trainingMethod,
+            setIndex: set.setIndex,
+            blockIndex: b.blockIndex,
+            weight: b.weight,
+            weightUnit: b.storedUnit,
+            reps: b.reps,
+            isTest: isTestMode,
+            createdAt: set.completedAt,
+          });
         });
       });
+
+      saveToOfflineCache(flatRows);
+      const ok = await uploadTrainingBatch(flatRows);
+      if (ok) {
+        alert(`✅ 動作「${selectedMovementId}」共 ${currentMovementSets.length} 組已成功同步至 Google Sheet！`);
+      } else {
+        alert(`⚠️ 已將「${selectedMovementId}」暫存於手機本地，待連網時再同步至雲端。`);
+      }
+    }
+
+    // 重設該動作狀態
+    updateActiveDraft({
+      selectedMovementId: '',
+      currentSetIndex: 1,
+      currentMovementSets: [],
+      blocks: [{ id: `b_${Date.now()}`, weight: 0, reps: 0, unit: defaultDisplayUnit }],
     });
 
-    onSaveToLocalCache(flatRows);
-    const success = await onUploadSession(flatRows);
-    if (success) {
-      setSessionCompletedSets([]);
-      finishMovement();
-      alert('訓練數據已成功批次上傳至 Google Sheet！');
-    } else {
-      alert('已暫存至本地快取，待網路正常或同步時再上傳！');
+    return true;
+  }, [
+    selectedMovementId,
+    currentMovementSets,
+    isTestMode,
+    saveToOfflineCache,
+    uploadTrainingBatch,
+    updateActiveDraft,
+    defaultDisplayUnit,
+  ]);
+
+  // [完成今天訓練] - 結束工作階段並返回主頁 (不重複上傳已同步動作)
+  const finishWorkout = useCallback(async () => {
+    // 檢查是否有尚未按下「完成這個動作」但已記錄的組數
+    if (currentMovementSets.length > 0) {
+      const confirmSync = confirm(
+        `當前動作「${selectedMovementId}」還有 ${currentMovementSets.length} 組尚未同步，是否同步並結束今天訓練？`
+      );
+      if (confirmSync) {
+        await finishMovement();
+      }
     }
-    return success;
-  }, [sessionCompletedSets, isTestMode, onSaveToLocalCache, onUploadSession, finishMovement]);
+
+    resetActiveDraft();
+    return true;
+  }, [currentMovementSets, selectedMovementId, finishMovement, resetActiveDraft]);
 
   return {
     selectedMethod,
@@ -222,6 +256,6 @@ export const useTrainingLog = ({
     finishSet,
     finishMovement,
     finishWorkout,
-    completedSetsCount: sessionCompletedSets.length,
+    completedSetsCount: currentMovementSets.length,
   };
 };

@@ -131,7 +131,7 @@ export const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen safe-top safe-bottom bg-slate-950 text-slate-100">
+    <div className="flex flex-col min-h-screen safe-top safe-bottom bg-slate-950 text-slate-100 select-none">
       <header className="px-4 py-3 flex items-center justify-between border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-10">
         <button
           onClick={() => navigate('/')}
@@ -145,7 +145,7 @@ export const SettingsPage: React.FC = () => {
 
       <main className="flex-1 p-4 space-y-5 pb-28 overflow-y-auto max-w-md mx-auto w-full">
         {/* 1. Google Apps Script 雲端設定 */}
-        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 shadow-sm">
           <div className="flex items-center gap-2 text-blue-400 font-semibold text-sm">
             <Cloud className="w-4 h-4" /> Google Apps Script URL
           </div>
@@ -162,7 +162,7 @@ export const SettingsPage: React.FC = () => {
         </section>
 
         {/* 2. 單位設定區 */}
-        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 shadow-sm">
           <h3 className="font-semibold text-sm text-slate-200">單位設定</h3>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -194,7 +194,7 @@ export const SettingsPage: React.FC = () => {
         </section>
 
         {/* 3. 動作詳細設定區 (A/B 模式與動態長度檔位) */}
-        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
+        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4 shadow-sm">
           <h3 className="font-semibold text-sm text-slate-200">動作詳細設定 (A/B 模式)</h3>
 
           <div>
@@ -218,6 +218,7 @@ export const SettingsPage: React.FC = () => {
               <input
                 type="number"
                 step="0.5"
+                min="0"
                 value={currentSetting.defaultWeight}
                 onChange={(e) =>
                   setCurrentSetting((prev) => ({
@@ -225,21 +226,23 @@ export const SettingsPage: React.FC = () => {
                     defaultWeight: parseFloat(e.target.value) || 0,
                   }))
                 }
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-center text-sm font-bold text-white"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-center text-sm font-bold text-white font-mono"
               />
             </div>
             <div>
               <label className="text-xs text-slate-400 block mb-1">預設起始次數</label>
               <input
                 type="number"
+                step="0.5"
+                min="0"
                 value={currentSetting.defaultReps}
                 onChange={(e) =>
                   setCurrentSetting((prev) => ({
                     ...prev,
-                    defaultReps: parseInt(e.target.value, 10) || 0,
+                    defaultReps: parseFloat(e.target.value) || 0,
                   }))
                 }
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-center text-sm font-bold text-white"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-center text-sm font-bold text-white font-mono"
               />
             </div>
           </div>
@@ -284,6 +287,7 @@ export const SettingsPage: React.FC = () => {
               <input
                 type="number"
                 step="0.5"
+                min="0.1"
                 value={currentSetting.stepValue}
                 onChange={(e) =>
                   setCurrentSetting((prev) => ({
@@ -292,7 +296,7 @@ export const SettingsPage: React.FC = () => {
                   }))
                 }
                 placeholder="例如 2.5"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-sm font-bold text-white"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-sm font-bold text-white font-mono"
               />
             </div>
           ) : (
@@ -305,13 +309,13 @@ export const SettingsPage: React.FC = () => {
                 {currentSetting.gearLevels.map((gear, idx) => (
                   <span
                     key={idx}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-950/80 border border-blue-700/60 text-blue-200 text-xs font-semibold"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-950/80 border border-blue-700/60 text-blue-200 text-xs font-semibold font-mono"
                   >
                     {gear} kg
                     <button
                       type="button"
                       onClick={() => handleRemoveGear(gear)}
-                      className="text-slate-400 hover:text-red-400"
+                      className="text-slate-400 hover:text-red-400 p-0.5 active:scale-90"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -325,7 +329,7 @@ export const SettingsPage: React.FC = () => {
                   placeholder="輸入重量 (例: 52.5)"
                   value={newGearInput}
                   onChange={(e) => setNewGearInput(e.target.value)}
-                  className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white"
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white font-mono"
                 />
                 <button
                   type="button"
@@ -340,7 +344,7 @@ export const SettingsPage: React.FC = () => {
         </section>
 
         {/* 4. 測試模式區 */}
-        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-amber-400" />

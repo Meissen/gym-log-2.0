@@ -1,14 +1,22 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Movement, MovementSetting, SystemSettings, HealthRecord, TrainingFlatRow } from '../types/models';
+import { 
+  Movement, 
+  MovementSetting, 
+  SystemSettings, 
+  HealthRecord, 
+  TrainingFlatRow,
+  ActiveTrainingDraft
+} from '../types/models';
 import { GoogleSheetsService } from '../services/googleSheetsService';
 
 interface AppStoreState {
-  // 遠端拉取的資料
+  // 遠端拉取與本地快取資料
   availableMovements: Movement[];
   trainingMethods: string[];
   movementSettings: MovementSetting[];
   healthRecords: HealthRecord[];
+  trainingHistory: TrainingFlatRow[]; // 所有歷史訓練紀錄 (供調閱最近三次)
 
   // 系統設定
   systemSettings: SystemSettings;
@@ -24,16 +32,33 @@ interface AppStoreState {
   deleteMovement: (id: string) => void;
   updateMovementSetting: (setting: MovementSetting) => void;
 
-  // 同步動作
+  // 進行中訓練草稿 (跳轉至主頁再返回不重置)
+  activeDraft: ActiveTrainingDraft;
+  updateActiveDraft: (draft: Partial<ActiveTrainingDraft>) => void;
+  resetActiveDraft: () => void;
+
+  // 歷史紀錄手動增加 (上傳成功後即時加入歷史)
+  appendTrainingHistory: (rows: TrainingFlatRow[]) => void;
+
+  // 全域同步更新
   setAllRemoteData: (data: {
     health?: HealthRecord[];
     movements?: { movements: Movement[]; methods: string[] };
     settings?: { system: Partial<SystemSettings>; movementSettings: MovementSetting[] };
+    training?: TrainingFlatRow[];
   }) => void;
 
-  // 呼叫 API
+  // API 呼叫
   uploadTrainingBatch: (rows: TrainingFlatRow[]) => Promise<boolean>;
 }
+
+const defaultDraft: ActiveTrainingDraft = {
+  selectedMethod: '訓練組',
+  selectedMovementId: '',
+  currentSetIndex: 1,
+  blocks: [{ id: 'b_init', weight: 0, reps: 0, unit: 'kg' }],
+  currentMovementSets: [],
+};
 
 export const useAppStore = create<AppStoreState>()(
   persist(
@@ -57,6 +82,7 @@ export const useAppStore = create<AppStoreState>()(
         { movementName: '啞鈴側平舉', defaultWeight: 10, defaultReps: 15, mode: 'B', stepValue: 0, gearLevels: [4, 6, 8, 10, 12, 14, 16, 18, 20, 22] },
       ],
       healthRecords: [],
+      trainingHistory: [],
       systemSettings: {
         defaultDisplayUnit: 'kg',
         storageUnit: 'kg',
@@ -64,6 +90,7 @@ export const useAppStore = create<AppStoreState>()(
         gasWebAppUrl: GoogleSheetsService.getUrl(),
       },
       offlineTrainingRows: [],
+      activeDraft: { ...defaultDraft },
 
       setSystemSettings: (newSettings) =>
         set((state) => {
@@ -82,10 +109,24 @@ export const useAppStore = create<AppStoreState>()(
 
       clearOfflineTrainingCache: () => set({ offlineTrainingRows: [] }),
 
+      // 新增動作：自動插入在該部位 (targetPart) 動作群的最後面
       addMovement: (movement) =>
-        set((state) => ({
-          availableMovements: [...state.availableMovements, movement],
-        })),
+        set((state) => {
+          const list = [...state.availableMovements];
+          let lastIndex = -1;
+          for (let i = list.length - 1; i >= 0; i--) {
+            if (list[i].targetPart === movement.targetPart) {
+              lastIndex = i;
+              break;
+            }
+          }
+          if (lastIndex !== -1) {
+            list.splice(lastIndex + 1, 0, movement);
+          } else {
+            list.push(movement);
+          }
+          return { availableMovements: list };
+        }),
 
       deleteMovement: (id) =>
         set((state) => ({
@@ -100,6 +141,24 @@ export const useAppStore = create<AppStoreState>()(
             : [...state.movementSettings, setting];
           return { movementSettings: next };
         }),
+
+      updateActiveDraft: (partial) =>
+        set((state) => ({
+          activeDraft: { ...state.activeDraft, ...partial },
+        })),
+
+      resetActiveDraft: () =>
+        set(() => ({
+          activeDraft: {
+            ...defaultDraft,
+            blocks: [{ id: `b_${Date.now()}`, weight: 0, reps: 0, unit: 'kg' }],
+          },
+        })),
+
+      appendTrainingHistory: (rows) =>
+        set((state) => ({
+          trainingHistory: [...rows, ...state.trainingHistory],
+        })),
 
       setAllRemoteData: (data) =>
         set((state) => {
@@ -120,12 +179,19 @@ export const useAppStore = create<AppStoreState>()(
               next.movementSettings = data.settings.movementSettings;
             }
           }
+          if (data.training && Array.isArray(data.training)) {
+            next.trainingHistory = data.training;
+          }
           return next;
         }),
 
       uploadTrainingBatch: async (rows) => {
         try {
           await GoogleSheetsService.uploadTrainingBatch(rows);
+          // 上傳成功後，立刻追加進本地歷史紀錄，調閱歷史時即時可見
+          set((state) => ({
+            trainingHistory: [...rows, ...state.trainingHistory],
+          }));
           return true;
         } catch (err) {
           console.error('上傳訓練數據失敗，已暫存至本地:', err);
